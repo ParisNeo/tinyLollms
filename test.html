@@ -1,25 +1,39 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>tinyLollMS Demo</title>
+    <title>Themed Chat Demo</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f0f2f5; }
-        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+        /* Custom Theme Overrides */
+        lollms-chat {
+            --lollms-primary: #8e44ad; /* Purple theme */
+            --lollms-bg: #fff;
+            --lollms-width: 450px;
+        }
+
     </style>
 </head>
 <body>
-    <div class="card">
-        <h1>tinyLollMS Widget Demo</h1>
-        <p>This page demonstrates the floating chat bubble.</p>
-        <p>Make sure you have created an app in the admin panel and copied its key.</p>
+
+    <div class="hero">
+        <h1>🚀 tinyLollms Demo</h1>
+        <p>This demo is pre-configured to use the auto-generated <code>demo-key</code>.</p>
+        <p>By default, it tries to connect to a local <b>Ollama</b> instance.</p>
+        <hr>
+        <p style="font-size: 0.9em; color: #666;">
+            If the chat bubble says "Connection failed", make sure <b>Ollama</b> is running locally, or go to 
+            <a href="/admin">/admin</a> to update the "Demo Application" settings.
+        </p>
     </div>
 
-    <!-- The Widget -->
-    <!-- Replace app_key with a real key from your admin panel -->
+    <!-- The Chat Widget -->
+    <!-- This uses the 'demo-key' which is automatically created on first server startup -->
+
     <lollms-chat 
-        app-key="REPLACE_WITH_YOUR_APP_KEY" 
-        model="gpt-3.5-turbo">
+        app-key="demo-key" 
+        assistant-name="PurpleBot"
+        title="Support Center"
+        welcome-message="Welcome to our support center"
+        model="mistral">
     </lollms-chat>
 
     <script type="module" src="/static/lollms_chat.js"></script>

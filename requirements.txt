@@ -4,4 +4,6 @@ pydantic
 starlette
 pyjwt
 aiosqlite
+pipmaster
 lollms_client
+openai

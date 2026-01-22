@@ -5,18 +5,33 @@
     <title>tinyLollMS Admin Panel</title>
     <link rel="stylesheet" href="/static/design-tokens.css">
     <style>
-        body { padding: 20px; background: var(--color-bg); }
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        body { padding: 20px; background: var(--color-bg); font-family: sans-serif; }
+        .container { max-width: 1100px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
         .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
         .full { grid-column: span 2; }
+        .group-row { display: flex; align-items: center; gap: 20px; padding: 10px; border: 1px dashed var(--color-muted); border-radius: 6px; }
         input, select { padding: 12px; border: 1px solid var(--color-muted); border-radius: 6px; font-size: 14px; }
+        .model-list-container { border: 1px solid #eee; padding: 10px; border-radius: 6px; max-height: 200px; overflow-y: auto; background: #fafafa; min-height: 60px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; }
+        .model-item { display: inline-block; background: #eee; padding: 4px 10px; margin: 3px; border-radius: 4px; font-size: 12px; cursor: pointer; user-select: none; }
+        .model-item.selected { background: var(--color-primary); color: white; }
         table { width: 100%; border-collapse: collapse; margin-top: 30px; }
         th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
-        .badge { font-family: monospace; background: #f0f0f0; padding: 3px 6px; border-radius: 4px; font-size: 12px; }
-        .actions { display: flex; gap: 10px; }
         .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
         .btn-primary { background: var(--color-primary); color: white; }
-        .btn-danger { background: var(--color-error); color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .status-badge { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+        .active { background: #dcfce7; color: #166534; }
+        .inactive { background: #fee2e2; color: #991b1b; }
+        
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(0,0,0,0.1);
+            border-top-color: var(--color-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -31,34 +46,54 @@
     </div>
 
     <div id="mainView" style="display:none">
-        <div style="display:flex; justify-content: space-between;">
-            <h1>Applications</h1>
-            <button onclick="logout()" class="btn btn-danger">Logout</button>
+        <div style="display:flex; justify-content: space-between; align-items: center;">
+            <h1>Dashboard</h1>
+            <button onclick="logout()" class="btn btn-secondary">Logout</button>
         </div>
 
         <form id="appForm" class="grid-form">
-            <input type="text" name="name" placeholder="Application Name" required>
-            <select name="binding" required>
+            <input type="text" name="name" placeholder="App Name" required>
+            <select name="binding" id="binding">
+                <option value="" disabled selected>Select Binding...</option>
                 <option value="lollms">Lollms</option>
+                <option value="ollama">Ollama</option>
                 <option value="openai">OpenAI</option>
                 <option value="open_router">OpenRouter</option>
-                <option value="claude">Claude</option>
+                <option value="claude">Anthropic Claude</option>
                 <option value="google">Google Gemini</option>
-                <option value="ollama">Ollama</option>
-                <option value="vllm">vLLM</option>
                 <option value="litellm">LiteLLM</option>
-                <option value="llama_cpp_server">Llama.cpp</option>
                 <option value="openwebui">OpenWebUI</option>
+                <option value="vllm">vLLM</option>
+                <option value="llama_cpp_server">Llama.cpp</option>
             </select>
-            <input type="text" name="host_address" placeholder="Host URL (e.g. http://localhost:11434)">
-            <input type="password" name="service_key" placeholder="API Key / Service Key">
-            <input type="text" name="models" placeholder="Allowed Models (comma separated, empty = all)" class="full">
-            <button type="submit" id="saveBtn" class="btn btn-primary full">Create Application</button>
+            <input type="text" name="host_address" id="host" placeholder="Host URL" required>
+            <input type="password" name="service_key" id="key" placeholder="API Key / Service Key">
+            
+            <div class="group-row full">
+                <label style="cursor:pointer"><input type="checkbox" name="active" id="app_active"> Application Active</label>
+                <label style="cursor:pointer; margin-left: 20px;"><input type="checkbox" name="verify_ssl" id="v_ssl" checked> Verify SSL</label>
+                <input type="text" name="cert_file_path" id="cert_path" placeholder="Custom Cert Path" style="flex:1">
+            </div>
+
+            <div class="full">
+                <div style="display:flex; justify-content: space-between; margin-bottom: 5px;">
+                    <label>Allowed Models:</label>
+                    <button type="button" id="discoverBtn" onclick="discoverModels()" class="btn-secondary" style="padding: 4px 12px; font-size: 11px;">Fetch Models</button>
+                </div>
+                <div id="modelDiscovery" class="model-list-container">
+                    <span style="color: #999; font-style: italic;">Select binding and host to fetch available models...</span>
+                </div>
+                <input type="hidden" name="models" id="modelsInput">
+            </div>
+            <div class="full">
+                <input type="text" name="welcome_message" id="welcome_msg" placeholder="Welcome Message (e.g. Hello! How can I help you today?)" style="width:100%">
+            </div>
+            <button type="submit" id="saveBtn" class="btn btn-primary full">Save Application</button>
         </form>
 
         <table id="appTable">
             <thead>
-                <tr><th>Name</th><th>Binding</th><th>App Key</th><th>Actions</th></tr>
+                <tr><th>Status</th><th>Name</th><th>Binding</th><th>App Key</th><th>Actions</th></tr>
             </thead>
             <tbody></tbody>
         </table>
@@ -66,21 +101,25 @@
 </div>
 
 <script>
-    let token = null;
-    let editingKey = null;
+    let token = null, editingKey = null, selectedModels = new Set();
+    const DEFAULT_HOSTS = { 
+        "lollms": "http://localhost:9642", 
+        "ollama": "http://localhost:11434", 
+        "openai": "https://api.openai.com/v1", 
+        "open_router": "https://openrouter.ai/api/v1", 
+        "claude": "https://api.anthropic.com", 
+        "google": "https://generativelanguage.googleapis.com",
+        "litellm": "http://localhost:4000",
+        "openwebui": "http://localhost:8080",
+        "vllm": "http://localhost:8000",
+        "llama_cpp_server": "http://localhost:8080" 
+    };
+
+    binding.onchange = (e) => { if(DEFAULT_HOSTS[e.target.value]) host.value = DEFAULT_HOSTS[e.target.value]; };
 
     async function login() {
-        const r = await fetch('/admin/login', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({username: user.value, password: pass.value})
-        });
-        if (r.ok) {
-            token = (await r.json()).access_token;
-            loginView.style.display = 'none';
-            mainView.style.display = 'block';
-            loadApps();
-        } else alert("Invalid Credentials");
+        const r = await fetch('/admin/login', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username: user.value, password: pass.value}) });
+        if (r.ok) { token = (await r.json()).access_token; loginView.style.display = 'none'; mainView.style.display = 'block'; loadApps(); }
     }
 
     function logout() { token = null; loginView.style.display='block'; mainView.style.display='none'; }
@@ -88,52 +127,67 @@
     async function loadApps() {
         const r = await fetch('/admin/apps', {headers: {'Authorization': `Bearer ${token}`}});
         const apps = await r.json();
-        const tbody = document.querySelector('#appTable tbody');
-        tbody.innerHTML = apps.map(app => `
+        document.querySelector('#appTable tbody').innerHTML = apps.map(app => `
             <tr>
+                <td><span class="status-badge ${app.active ? 'active' : 'inactive'}">${app.active ? 'Active' : 'Off'}</span></td>
                 <td>${app.name}</td>
                 <td><b>${app.binding}</b></td>
-                <td><span class="badge">${app.key}</span></td>
-                <td class="actions">
+                <td><code style="font-size:11px">${app.key}</code></td>
+                <td>
                     <button onclick='editApp(${JSON.stringify(app)})'>Edit</button>
-                    <button onclick="deleteApp('${app.key}')" style="color:red">Delete</button>
+                    <button onclick="deleteApp('${app.key}')" style="color:red; background:none; border:none; cursor:pointer;">Del</button>
                 </td>
             </tr>
         `).join('');
     }
 
+    async function discoverModels() {
+        const btn = document.getElementById('discoverBtn');
+        const container = document.getElementById('modelDiscovery');
+        btn.disabled = true;
+        container.innerHTML = '<div class="spinner"></div>';
+
+        const payload = { binding: binding.value, host_address: host.value, service_key: key.value, verify_ssl: v_ssl.checked, cert_file_path: cert_path.value };
+        try {
+            const r = await fetch('/admin/fetch_models', { method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, body: JSON.stringify(payload) });
+            const data = await r.json();
+            if (r.ok) {
+                container.innerHTML = data.models.length ? data.models.map(m => `<span class="model-item ${selectedModels.has(m) ? 'selected' : ''}" onclick="toggleModel(this, \`${m}\`)">${m}</span>`).join('') : 'No models found.';
+            } else { container.innerHTML = `<span style="color:red">Error: ${data.detail}</span>`; }
+        } catch (e) { container.innerHTML = '<span style="color:red">Connection failed</span>'; }
+        finally { btn.disabled = false; }
+    }
+
+    function toggleModel(el, model) {
+        if (selectedModels.has(model)) { selectedModels.delete(model); el.classList.remove('selected'); }
+        else { selectedModels.add(model); el.classList.add('selected'); }
+        modelsInput.value = Array.from(selectedModels).join(',');
+    }
+
     document.getElementById('appForm').onsubmit = async (e) => {
         e.preventDefault();
-        const data = Object.fromEntries(new FormData(e.target));
+        const fd = new FormData(e.target);
+        const data = Object.fromEntries(fd);
+        data.active = app_active.checked;
+        data.verify_ssl = v_ssl.checked;
         const url = editingKey ? `/admin/apps/${editingKey}` : '/admin/add_app';
-        await fetch(url, {
-            method: editingKey ? 'PUT' : 'POST',
-            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
-            body: JSON.stringify(data)
-        });
-        editingKey = null;
-        e.target.reset();
-        saveBtn.textContent = "Create Application";
-        loadApps();
+        await fetch(url, { method: editingKey ? 'PUT' : 'POST', headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`}, body: JSON.stringify(data) });
+        editingKey = null; selectedModels.clear(); e.target.reset(); modelDiscovery.innerHTML = ''; loadApps();
     };
 
     function editApp(app) {
         editingKey = app.key;
         const f = document.getElementById('appForm');
-        f.name.value = app.name;
-        f.binding.value = app.binding;
-        f.host_address.value = app.host_address || "";
-        f.service_key.value = app.service_key || "";
-        f.models.value = app.allowed_models.join(', ');
-        saveBtn.textContent = "Update Application";
+        f.name.value = app.name; f.binding.value = app.binding; f.host_address.value = app.host_address;
+        f.service_key.value = app.service_key || ""; f.app_active.checked = app.active; f.v_ssl.checked = app.verify_ssl;
+        f.cert_path.value = app.cert_file_path || "";
+        selectedModels = new Set(app.allowed_models);
+        modelsInput.value = app.allowed_models.join(',');
+        modelDiscovery.innerHTML = app.allowed_models.map(m => `<span class="model-item selected" onclick="toggleModel(this, \`${m}\`)">${m}</span>`).join('');
+        saveBtn.textContent = "Update Application"; window.scrollTo(0,0);
     }
 
-    async function deleteApp(key) {
-        if (confirm("Delete this application?")) {
-            await fetch(`/admin/apps/${key}`, {method: 'DELETE', headers: {'Authorization': `Bearer ${token}`}});
-            loadApps();
-        }
-    }
+    async function deleteApp(key) { if(confirm("Delete this application?")) { await fetch(`/admin/apps/${key}`, {method: 'DELETE', headers: {'Authorization': `Bearer ${token}`}}); loadApps(); } }
 </script>
 </body>
 </html>

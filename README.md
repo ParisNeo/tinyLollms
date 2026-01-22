@@ -1,130 +1,155 @@
 # 🤖 tinyLollms
 
-[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-05998b.svg)](https://fastapi.tiangolo.com/)
-[![GitHub stars](https://img.shields.io/github/stars/ParisNeo/tinyLollms.svg)](https://github.com/ParisNeo/tinyLollms/stargazers)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/)
+[![Docker](https://img.shields.io/badge/Docker-Supported-blue.svg)](https://www.docker.com/)
 
-**tinyLollms** is a lightweight, secure proxy server and chat widget designed to expose various AI backends to your websites and applications. Built on top of `lollms_client`, it allows you to manage multiple AI providers (Ollama, OpenAI, Claude, etc.) through a single interface without exposing your sensitive API keys to the frontend.
-
----
-
-## ✨ Features
-
-- 🛡️ **Secure Proxy**: Hide your API keys behind a backend proxy.
-- 🔌 **Multi-Backend Support**: Connect to Ollama, OpenAI, Anthropic, Google Gemini, vLLM, LiteLLM, and more.
-- 🔐 **Admin Dashboard**: Manage "Applications" and generate unique keys for each project.
-- 💬 **Web Component Widget**: A ready-to-use, floating chat bubble that can be embedded in any HTML page with one tag.
-- 📦 **Lightweight**: Powered by FastAPI, SQLite, and Vanilla JS.
+**tinyLollms** is a secure, production-ready gateway and proxy server designed to bridge frontend applications with a multitude of LLM backends. It solves the critical security issue of exposing API keys and backend infrastructure URLs directly to the client-side code.
 
 ---
 
-## 🚀 Quick Start
+## 🏗️ Architecture & How It Works
 
-### 1. Installation
-
-Clone the repository and install the dependencies:
-
-```bash
-git clone https://github.com/ParisNeo/tinyLollms.git
-cd tinyLollms
-pip install -r requirements.txt
-```
-
-### 2. Configuration
-
-Create a `.env` file (or copy from `.env.example`):
-
-```bash
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin123
-JWT_SECRET=your_random_secret_string
-```
-
-### 3. Run the Server
-
-```bash
-python main.py
-```
-The server will start at `http://localhost:8002`.
+1.  **Frontend**: The `<lollms-chat>` web component (Widget) lives on your website. It only knows your tinyLollms server URL and an **App Key**.
+2.  **Proxy Server**: tinyLollms receives the request, validates the **App Key**, checks if the application is **Active**, and verifies that the requested **Model** is whitelisted.
+3.  **LLM Backend**: tinyLollms uses the stored credentials (API keys/Service keys) to communicate with the actual AI provider (Ollama, OpenAI, etc.) and streams the response back to the widget.
 
 ---
 
-## 🛠️ Usage Flow
+## ✨ Features in Depth
 
-### Step 1: Configure your AI Backend
-1. Open `http://localhost:8002/admin`.
-2. Login with your admin credentials.
-3. Create a new **Application**.
-4. Choose a **Binding** (e.g., `ollama` for local models or `openai` for cloud).
-5. Enter the **Host Address** (e.g., `http://localhost:11434` for Ollama).
-6. Enter the **Service Key** (if required by the provider).
-7. Save and copy the generated **App Key**.
+-   **Multi-Binding Core**: Native support for `lollms`, `ollama`, `openai`, `open_router`, `claude`, `google`, `litellm`, `openwebui`, `vllm`, and `llama_cpp_server`.
+-   **Model Discovery**: Use the "Fetch Models" feature in the Admin Panel to query the backend in real-time. Selectable chips allow you to build a strict model whitelist for each key.
+-   **Dynamic Installation**: Leverages `lollms_client`'s ability to dynamically install required libraries for specific bindings on the fly.
+-   **SSL Mastery**: 
+    -   Serve tinyLollms over **HTTPS** via environment variables.
+    -   Configure backend-specific SSL verification (Skip verification for local dev or provide a path to a custom CA bundle).
+-   **Persistence**: Uses an optimized SQLite backend with automatic migrations to ensure your configuration is safe.
+-   **Developer Experience**: Built-in `/demo` endpoint for immediate testing and verification.
 
-### Step 2: Embed the Chat Widget
-Add the following code to any HTML file:
+---
+
+## 🚀 Deployment
+
+### Method 1: Docker Compose (Recommended)
+
+1.  Clone the repository.
+2.  Configure your variables in a `.env` file (see Configuration section).
+3.  Launch the stack:
+    ```bash
+    docker-compose up -d
+    ```
+    *Note: The `./data` directory will be created to store your SQLite database.*
+
+### Method 2: Manual Installation
+
+1.  **Environment Setup**:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # or venv\Scripts\activate on Windows
+    pip install -r requirements.txt
+    ```
+2.  **Launch**:
+    ```bash
+    python main.py --host 0.0.0.0 --port 8002
+    ```
+
+---
+
+## ⚙️ Advanced Configuration (.env)
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `HOST` | `0.0.0.0` | Binding address for the proxy server. |
+| `PORT` | `8002` | Binding port. |
+| `ADMIN_USERNAME` | `admin` | Username for the dashboard. |
+| `ADMIN_PASSWORD` | `admin123` | Password for the dashboard. |
+| `JWT_SECRET` | `supersecret...` | Cryptographic secret for session tokens. |
+| `SSL_KEYFILE` | `None` | Path to the private key (e.g., `/app/certs/key.pem`) for HTTPS. |
+| `SSL_CERTFILE` | `None` | Path to the certificate (e.g., `/app/certs/cert.pem`) for HTTPS. |
+| `SQLITE_DB` | `data/lollms.db` | Path to the SQLite database file. |
+
+---
+
+## 🛠️ Admin Panel Workflow
+
+### 1. The Demo App
+On first launch, tinyLollms creates a **Demo Application** with the key `demo-key`.
+-   It is **Deactivated** by default.
+-   Go to `/admin`, log in, and click **Edit** on the Demo Application.
+-   Configure your local provider (e.g., Ollama at `http://localhost:11434`).
+-   Click **Fetch Models**, select your model, and check the **Active** box.
+
+### 2. Model Whitelisting
+To prevent unauthorized use of expensive models, each App Key has a whitelist. If the whitelist is empty, **all** models from that backend are allowed. Once you select at least one model via the "Fetch" tool, only those specific models will be accessible via that key.
+
+### 3. Binding Defaults
+The UI automatically populates default URLs for popular bindings:
+-   **Ollama**: `http://localhost:11434`
+-   **OpenAI**: `https://api.openai.com/v1`
+-   **OpenWebUI**: `http://localhost:8080`
+-   **LiteLLM**: `http://localhost:4000`
+
+---
+
+## 💬 Chat Widget Integration
+
+To add the chat to your own website, add the following tag and script:
 
 ```html
-<!-- 1. The Widget Tag -->
+<!-- Integration Tag -->
 <lollms-chat 
-    app-key="YOUR_GENERATED_APP_KEY" 
-    model="your-model-name">
+    app-key="your-application-uuid-key" 
+    model="the-model-id-e.g-mistral">
 </lollms-chat>
 
-<!-- 2. The Script (pointing to your tinyLollms server) -->
-<script type="module" src="http://localhost:8002/static/lollms_chat.js"></script>
+<!-- Loading Script -->
+<script type="module" src="https://your-server.com:8002/static/lollms_chat.js"></script>
 ```
 
----
-
-## 🔗 Supported Bindings
-
-Through the `lollms_client` library, tinyLollms supports:
-
-| Binding | Target |
-| :--- | :--- |
-| `lollms` | Lollms Main Server |
-| `ollama` | Local Ollama instances |
-| `openai` | OpenAI (GPT-4, etc.) |
-| `claude` | Anthropic Claude |
-| `google` | Google Gemini |
-| `open_router` | OpenRouter API |
-| `vllm` / `litellm` | High-performance inference servers |
-| `llama_cpp_server` | Local llama.cpp instances |
+### Widget Attributes
+-   `app-key`: The unique key generated in the Admin Panel.
+-   `model`: The specific model ID (must match one in your whitelist).
 
 ---
 
-## 📂 Project Structure
+## 🔒 Security Best Practices
 
-```text
-├── main.py              # FastAPI Backend & Proxy Logic
-├── static/
-│   ├── admin.html       # Admin Management UI
-│   ├── lollms_chat.js   # Frontend Web Component
-│   ├── utils.js         # Markdown/Sanitization helpers
-│   └── design-tokens.css # UI Styling
-├── data/                # SQLite database (auto-generated)
-└── test.html            # Local demo page
+1.  **HTTPS**: If you serve the widget script over HTTPS, your `tinyLollms` server **must** also use HTTPS to avoid Mixed Content errors.
+2.  **CORS**: By default, tinyLollms allows all origins. For production, modify the `CORSMiddleware` in `main.py` to only allow your specific frontend domains.
+3.  **CA Certificates**: If your LLM backend is internal and uses a self-signed certificate, use the `cert_file_path` field in the Admin UI to provide the `.pem` file for secure verification.
+4.  **Secrets**: Never commit your `.env` file or your `data/lollms.db` to version control.
+
+## 🎨 Theming & Customization
+
+You can customize the look and persona of the chat widget directly via HTML attributes and CSS variables.
+
+### HTML Attributes
+- `assistant-name`: The name displayed above AI messages (Default: "Assistant").
+- `welcome-message`: A greeting message shown when the chat starts.
+- `title`: The text shown in the chat window header.
+- `app-key`: Your application key from the admin panel.
+
+## 💬 Welcome Message
+You can set a welcome message in two ways:
+1.  **Globally**: In the Admin Panel, edit your application and fill in the "Welcome Message" field.
+2.  **Locally**: Add the `welcome-message` attribute to your `<lollms-chat>` tag. The local attribute takes priority over the database setting.
+
+### CSS Variables (Theming)
+Override these in your site's CSS to match your brand:
+```css
+lollms-chat {
+    --lollms-primary: #8e44ad; /* Purple theme */
+    --lollms-bg: #fff;
+    --lollms-width: 450px;
+}
 ```
 
----
-
-## 🛡️ Security Note
-
-- **Admin Credentials**: Change your `ADMIN_PASSWORD` in production.
-- **CORS**: By default, the proxy allows all origins (`*`). For production, restrict this in `main.py` to your specific domains.
-- **HTTPS**: Always run behind a reverse proxy (like Nginx) with SSL in production environments.
-
+### 🔄 Multi-Model Support
+If you whitelist more than one model in the Admin Panel for a specific key, the widget will automatically render a dropdown selector in the header, allowing users to switch models during the conversation.
 ---
 
 ## 📄 License
+This project is licensed under the **Apache License 2.0**.
 
-This project is licensed under the **Apache License 2.0**. See the [LICENSE](LICENSE) file for details.
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Feel free to open issues or submit pull requests to improve the UI, add features, or fix bugs.
-
-Created by [Saifeddine ALOUI](https://github.com/ParisNeo)
+Created by [ParisNeo](https://github.com/ParisNeo)

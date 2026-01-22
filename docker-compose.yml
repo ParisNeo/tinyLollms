@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  tiny-lollms:
+    build: .
+    container_name: tiny-lollms
+    ports:
+      - "${PORT:-8002}:${PORT:-8002}"
+    volumes:
+      - ./data:/app/data
+      # Mount your local certs folder to the container
+      - ./certs:/app/certs:ro 
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8002
+      - SSL_KEYFILE=${SSL_KEYFILE:-}
+      - SSL_CERTFILE=${SSL_CERTFILE:-}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - JWT_SECRET=${JWT_SECRET:-supersecretjwtkey}
+      - SQLITE_DB=data/lollms.db
+    restart: unless-stopped
