@@ -2,182 +2,138 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>microLollMS Admin Panel</title>
+    <title>tinyLollMS Admin Panel</title>
+    <link rel="stylesheet" href="/static/design-tokens.css">
     <style>
-        body {font-family: 'Segoe UI', Tahoma, sans-serif; background:#f4f7f9; margin:0; padding:0;}
-        .container {max-width: 900px; margin: 40px auto; background:#fff; padding:30px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);}
-        h1 {text-align:center; color:#333;}
-        .msg {color:#c00; margin-top:10px;}
-        .login-section, .dashboard-section {display:none;}
-        .app-table {width:100%; border-collapse:collapse; margin-top:20px;}
-        .app-table th, .app-table td {border:1px solid #ddd; padding:8px; text-align:left;}
-        .app-table th {background:#f0f0f0;}
-        button {padding:8px 12px; background:#0066cc; color:#fff; border:none; border-radius:4px; cursor:pointer;}
-        button:hover {background:#004999;}
-        .danger {background:#d9534f;}
-        .danger:hover {background:#c9302c;}
-        .form-section {margin-top:30px;}
-        .form-section input {padding:6px; width:calc(100% - 14px); margin-bottom:10px;}
+        body { padding: 20px; background: var(--color-bg); }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 20px 0; }
+        .full { grid-column: span 2; }
+        input, select { padding: 12px; border: 1px solid var(--color-muted); border-radius: 6px; font-size: 14px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 30px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        .badge { font-family: monospace; background: #f0f0f0; padding: 3px 6px; border-radius: 4px; font-size: 12px; }
+        .actions { display: flex; gap: 10px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn-primary { background: var(--color-primary); color: white; }
+        .btn-danger { background: var(--color-error); color: white; }
     </style>
 </head>
 <body>
 <div class="container">
-    <h1>microLollMS Admin Panel</h1>
-
-    <!-- Login Section -->
-    <div class="login-section" id="loginSection">
-        <label>Username:
-            <input type="text" id="username" placeholder="admin">
-        </label><br>
-        <label>Password:
-            <input type="password" id="password" placeholder="admin123">
-        </label><br>
-        <button id="loginBtn">Login</button>
-        <div class="msg" id="loginMsg"></div>
+    <div id="loginView">
+        <h2>Admin Login</h2>
+        <div class="grid-form" style="max-width: 400px;">
+            <input type="text" id="user" placeholder="Username" value="admin">
+            <input type="password" id="pass" placeholder="Password" value="admin123">
+            <button onclick="login()" class="btn btn-primary full">Login</button>
+        </div>
     </div>
 
-    <!-- Dashboard Section -->
-    <div class="dashboard-section" id="dashboardSection">
-        <button id="logoutBtn" class="danger">Logout</button>
-        <h2>Applications</h2>
-        <table class="app-table" id="appsTable">
+    <div id="mainView" style="display:none">
+        <div style="display:flex; justify-content: space-between;">
+            <h1>Applications</h1>
+            <button onclick="logout()" class="btn btn-danger">Logout</button>
+        </div>
+
+        <form id="appForm" class="grid-form">
+            <input type="text" name="name" placeholder="Application Name" required>
+            <select name="binding" required>
+                <option value="lollms">Lollms</option>
+                <option value="openai">OpenAI</option>
+                <option value="open_router">OpenRouter</option>
+                <option value="claude">Claude</option>
+                <option value="google">Google Gemini</option>
+                <option value="ollama">Ollama</option>
+                <option value="vllm">vLLM</option>
+                <option value="litellm">LiteLLM</option>
+                <option value="llama_cpp_server">Llama.cpp</option>
+                <option value="openwebui">OpenWebUI</option>
+            </select>
+            <input type="text" name="host_address" placeholder="Host URL (e.g. http://localhost:11434)">
+            <input type="password" name="service_key" placeholder="API Key / Service Key">
+            <input type="text" name="models" placeholder="Allowed Models (comma separated, empty = all)" class="full">
+            <button type="submit" id="saveBtn" class="btn btn-primary full">Create Application</button>
+        </form>
+
+        <table id="appTable">
             <thead>
-                <tr><th>Key</th><th>Name</th><th>Allowed Models</th><th>Actions</th></tr>
+                <tr><th>Name</th><th>Binding</th><th>App Key</th><th>Actions</th></tr>
             </thead>
             <tbody></tbody>
         </table>
-
-        <div class="form-section">
-            <h3>Add / Update Application</h3>
-            <form id="appForm">
-                <!-- Key input removed – server generates it automatically -->
-                <input type="text" name="name" placeholder="Name" required><br>
-                <input type="text" name="models" placeholder="Allowed models (comma separated)"><br>
-                <button type="submit" id="saveBtn">Save</button>
-            </form>
-            <pre id="result"></pre>
-        </div>
     </div>
 </div>
 
 <script>
-    const loginSection = document.getElementById('loginSection');
-    const dashboardSection = document.getElementById('dashboardSection');
-    const loginBtn = document.getElementById('loginBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const loginMsg = document.getElementById('loginMsg');
-    const result = document.getElementById('result');
-    const appsTableBody = document.querySelector('#appsTable tbody');
     let token = null;
-    let editMode = false; // false = add, true = update
-    let editKey = null;   // holds key of app being edited
+    let editingKey = null;
 
-    function showLogin() { loginSection.style.display='block'; dashboardSection.style.display='none'; }
-    function showDashboard() { loginSection.style.display='none'; dashboardSection.style.display='block'; loadApps(); }
-
-    // Initial view
-    showLogin();
-
-    loginBtn.addEventListener('click', async () => {
-        const payload = {
-            username: document.getElementById('username').value,
-            password: document.getElementById('password').value
-        };
-        try {
-            const resp = await fetch('/admin/login', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            });
-            if (!resp.ok) throw new Error('Invalid credentials');
-            const data = await resp.json();
-            token = data.access_token;
-            loginMsg.textContent = '';
-            showDashboard();
-        } catch (e) {
-            loginMsg.textContent = e.message;
-        }
-    });
-
-    logoutBtn.addEventListener('click', () => {
-        token = null;
-        editMode = false;
-        editKey = null;
-        document.getElementById('appForm').reset();
-        showLogin();
-    });
-
-    async function loadApps() {
-        const resp = await fetch('/admin/apps', {
-            headers: {'Authorization': `Bearer ${token}`}
+    async function login() {
+        const r = await fetch('/admin/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({username: user.value, password: pass.value})
         });
-        const apps = await resp.json();
-        appsTableBody.innerHTML = '';
-        apps.forEach(app => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td>${app.key}</td>
-                <td>${app.name}</td>
-                <td>${app.allowed_models.join(', ')}</td>
-                <td>
-                    <button class="editBtn">Edit</button>
-                    <button class="delBtn danger">Delete</button>
-                </td>
-            `;
-            // Edit handler
-            tr.querySelector('.editBtn').addEventListener('click', () => {
-                editMode = true;
-                editKey = app.key;
-                const form = document.getElementById('appForm');
-                form.name.value = app.name;
-                form.models.value = app.allowed_models.join(', ');
-                document.getElementById('saveBtn').textContent = 'Update';
-            });
-            // Delete handler
-            tr.querySelector('.delBtn').addEventListener('click', async () => {
-                if (!confirm(`Delete app ${app.key}?`)) return;
-                const delResp = await fetch(`/admin/apps/${app.key}`, {
-                    method: 'DELETE',
-                    headers: {'Authorization': `Bearer ${token}`}
-                });
-                const delData = await delResp.json();
-                result.textContent = JSON.stringify(delData, null, 2);
-                loadApps();
-            });
-            appsTableBody.appendChild(tr);
-        });
+        if (r.ok) {
+            token = (await r.json()).access_token;
+            loginView.style.display = 'none';
+            mainView.style.display = 'block';
+            loadApps();
+        } else alert("Invalid Credentials");
     }
 
-    // Add / Update form submit
-    document.getElementById('appForm').addEventListener('submit', async e => {
+    function logout() { token = null; loginView.style.display='block'; mainView.style.display='none'; }
+
+    async function loadApps() {
+        const r = await fetch('/admin/apps', {headers: {'Authorization': `Bearer ${token}`}});
+        const apps = await r.json();
+        const tbody = document.querySelector('#appTable tbody');
+        tbody.innerHTML = apps.map(app => `
+            <tr>
+                <td>${app.name}</td>
+                <td><b>${app.binding}</b></td>
+                <td><span class="badge">${app.key}</span></td>
+                <td class="actions">
+                    <button onclick='editApp(${JSON.stringify(app)})'>Edit</button>
+                    <button onclick="deleteApp('${app.key}')" style="color:red">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('appForm').onsubmit = async (e) => {
         e.preventDefault();
-        const form = e.target;
-        const payload = {
-            name: form.name.value,
-            models: form.models.value
-        };
-        const url = editMode ? `/admin/apps/${editKey}` : '/admin/add_app';
-        const method = editMode ? 'PUT' : 'POST';
-        try {
-            const resp = await fetch(url, {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
-            const data = await resp.json();
-            result.textContent = JSON.stringify(data, null, 2);
+        const data = Object.fromEntries(new FormData(e.target));
+        const url = editingKey ? `/admin/apps/${editingKey}` : '/admin/add_app';
+        await fetch(url, {
+            method: editingKey ? 'PUT' : 'POST',
+            headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+            body: JSON.stringify(data)
+        });
+        editingKey = null;
+        e.target.reset();
+        saveBtn.textContent = "Create Application";
+        loadApps();
+    };
+
+    function editApp(app) {
+        editingKey = app.key;
+        const f = document.getElementById('appForm');
+        f.name.value = app.name;
+        f.binding.value = app.binding;
+        f.host_address.value = app.host_address || "";
+        f.service_key.value = app.service_key || "";
+        f.models.value = app.allowed_models.join(', ');
+        saveBtn.textContent = "Update Application";
+    }
+
+    async function deleteApp(key) {
+        if (confirm("Delete this application?")) {
+            await fetch(`/admin/apps/${key}`, {method: 'DELETE', headers: {'Authorization': `Bearer ${token}`}});
             loadApps();
-            form.reset();
-            editMode = false;
-            editKey = null;
-            document.getElementById('saveBtn').textContent = 'Save';
-        } catch (err) {
-            result.textContent = 'Error: ' + err.message;
         }
-    });
+    }
 </script>
 </body>
 </html>

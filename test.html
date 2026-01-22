@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>tinyLollMS Demo</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f0f2f5; }
+        .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>tinyLollMS Widget Demo</h1>
+        <p>This page demonstrates the floating chat bubble.</p>
+        <p>Make sure you have created an app in the admin panel and copied its key.</p>
+    </div>
+
+    <!-- The Widget -->
+    <!-- Replace app_key with a real key from your admin panel -->
+    <lollms-chat 
+        app-key="REPLACE_WITH_YOUR_APP_KEY" 
+        model="gpt-3.5-turbo">
+    </lollms-chat>
+
+    <script type="module" src="/static/lollms_chat.js"></script>
+</body>
+</html>

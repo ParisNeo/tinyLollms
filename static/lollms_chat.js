@@ -1,188 +1,89 @@
-// Enhanced lollms-chat web component – floating bubble chat widget.
-// Usage: <lollms-chat app_key="my_key" model="gpt-4"></lollms-chat>
 import { mdToHtml } from "./utils.js";
 
 class LollmsChat extends HTMLElement {
-    static get observedAttributes() {
-        return ["app_key", "app-key", "model"];
-    }
-
     constructor() {
         super();
         this.attachShadow({ mode: "open" });
-
-        // Initialize attributes (will be updated in attributeChangedCallback)
         this._appKey = "";
         this._model = "default";
+        this._conversation = [];
 
-        // Base UI – hidden initially, will be toggled by the bubble button
         this.shadowRoot.innerHTML = `
             <style>
-                .bubble-btn {
-                    position: fixed;
-                    bottom: 20px;
-                    right: 20px;
-                    width: 60px;
-                    height: 60px;
-                    background: #0066cc;
-                    border-radius: 50%;
-                    color: #fff;
-                    font-size: 30px;
-                    line-height: 60px;
-                    text-align: center;
-                    cursor: pointer;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-                    z-index: 1000;
-                }
-                .chat-window {
-                    position: fixed;
-                    bottom: 90px;
-                    right: 20px;
-                    width: 480px;               /* larger width */
-                    max-height: 600px;          /* larger height */
-                    background: #fff;
-                    border: 1px solid #ddd;
-                    border-radius: 8px;
-                    display: flex;
-                    flex-direction: column;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    z-index: 1000;
-                    font-family: Arial, sans-serif;
-                }
-                .header {
-                    background: #0066cc;
-                    color: #fff;
-                    padding: 8px;
-                    text-align: center;
-                    font-weight: bold;
-                    border-top-left-radius: 8px;
-                    border-top-right-radius: 8px;
-                }
-                .messages {
-                    flex: 1;
-                    padding: 8px;
-                    overflow-y: auto;
-                }
-                .msg {
-                    margin: 4px 0;
-                }
-                .msg.user { color: #0b79d0; }
-                .msg.assistant { color: #333; }
-                .input-area {
-                    display: flex;
-                    border-top: 1px solid #eee;
-                }
-                textarea {
-                    flex: 1;
-                    resize: none;
-                    border: none;
-                    padding: 8px;
-                    font-size: 14px;
-                    line-height: 1.4;
-                }
-                button.send {
-                    background: #0066cc;
-                    color: #fff;
-                    border: none;
-                    padding: 0 12px;
-                    cursor: pointer;
-                }
+                .bubble { position: fixed; bottom: 20px; right: 20px; width: 60px; height: 60px; background: #0066cc; border-radius: 50%; color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 9999; font-size: 24px; transition: transform 0.2s; }
+                .bubble:hover { transform: scale(1.1); }
+                .window { position: fixed; bottom: 90px; right: 20px; width: 400px; height: 550px; background: white; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); display: none; flex-direction: column; z-index: 9999; overflow: hidden; font-family: system-ui, sans-serif; }
+                .header { background: #0066cc; color: white; padding: 15px; font-weight: bold; display: flex; justify-content: space-between; }
+                .messages { flex: 1; padding: 15px; overflow-y: auto; background: #f9f9f9; display: flex; flex-direction: column; gap: 10px; }
+                .msg { padding: 10px 14px; border-radius: 10px; max-width: 85%; font-size: 14px; line-height: 1.4; }
+                .msg.user { align-self: flex-end; background: #0066cc; color: white; }
+                .msg.bot { align-self: flex-start; background: #e9e9eb; color: #333; }
+                .input-box { border-top: 1px solid #eee; padding: 10px; display: flex; gap: 5px; }
+                textarea { flex: 1; border: 1px solid #ddd; border-radius: 6px; padding: 8px; resize: none; outline: none; height: 40px; }
+                button { background: #0066cc; color: white; border: none; padding: 0 15px; border-radius: 6px; cursor: pointer; }
             </style>
-            <div class="bubble-btn" title="Open chat">💬</div>
-            <div class="chat-window" style="display:none;">
-                <div class="header">LollMS Chat</div>
-                <div class="messages" id="msgBox"></div>
-                <div class="input-area">
-                    <textarea id="inputBox" rows="2" placeholder="Type a message..."></textarea>
-                    <button class="send" id="sendBtn">▶</button>
+            <div class="bubble" id="toggle">💬</div>
+            <div class="window" id="win">
+                <div class="header">Chat Assistant <span style="cursor:pointer" id="close">✕</span></div>
+                <div class="messages" id="msgs"></div>
+                <div class="input-box">
+                    <textarea id="txt" placeholder="Ask something..."></textarea>
+                    <button id="send">Send</button>
                 </div>
             </div>
         `;
-
-        this._bubbleBtn = this.shadowRoot.querySelector(".bubble-btn");
-        this._chatWindow = this.shadowRoot.querySelector(".chat-window");
-        this._msgBox = this.shadowRoot.getElementById("msgBox");
-        this._inputBox = this.shadowRoot.getElementById("inputBox");
-        this._sendBtn = this.shadowRoot.getElementById("sendBtn");
-
-        this._conversation = [];
-
-        this._bubbleBtn.addEventListener("click", () => {
-            this._chatWindow.style.display = "flex";
-            this._bubbleBtn.style.display = "none";
-            this._inputBox.focus();
-        });
-
-        this._sendBtn.addEventListener("click", () => this._onSend());
-
-        // Enter (without Shift) sends the message
-        this._inputBox.addEventListener("keydown", (e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                this._onSend();
-            }
-        });
-    }
-
-    attributeChangedCallback(name, oldValue, newValue) {
-        if (name === "app_key" || name === "app-key") {
-            this._appKey = newValue || "";
-        } else if (name === "model") {
-            this._model = newValue || "default";
-        }
     }
 
     connectedCallback() {
-        // Ensure attributes are read on initial connection
-        this._appKey = this.getAttribute("app_key") || this.getAttribute("app-key") || "";
+        this._appKey = this.getAttribute("app-key") || "";
         this._model = this.getAttribute("model") || "default";
+
+        const win = this.shadowRoot.getElementById('win');
+        const toggle = this.shadowRoot.getElementById('toggle');
+        const txt = this.shadowRoot.getElementById('txt');
+        
+        toggle.onclick = () => win.style.display = win.style.display === 'flex' ? 'none' : 'flex';
+        this.shadowRoot.getElementById('close').onclick = () => win.style.display = 'none';
+        this.shadowRoot.getElementById('send').onclick = () => this.send();
+        txt.onkeydown = (e) => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } };
     }
 
-    _appendMessage(role, content) {
-        const div = document.createElement("div");
-        div.className = `msg ${role}`;
-        // Render markdown for assistant messages; plain text for user
-        if (role === "assistant") {
-            div.innerHTML = mdToHtml(content);
-        } else {
-            div.textContent = `You: ${content}`;
-        }
-        this._msgBox.appendChild(div);
-        this._msgBox.scrollTop = this._msgBox.scrollHeight;
-    }
+    async send() {
+        const input = this.shadowRoot.getElementById('txt');
+        const text = input.value.trim();
+        if (!text) return;
 
-    async _onSend() {
-        const userMsg = this._inputBox.value.trim();
-        if (!userMsg) return;
-        this._inputBox.value = "";
-        this._appendMessage("user", userMsg);
-        this._conversation.push({ role: "user", content: userMsg });
-
-        const payload = {
-            app_key: this._appKey,
-            model: this._model,
-            messages: this._conversation,
-        };
+        input.value = '';
+        this.addMessage('user', text);
+        this._conversation.push({role: 'user', content: text});
 
         try {
-            const resp = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload),
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    app_key: this._appKey,
+                    model: this._model,
+                    messages: this._conversation
+                })
             });
-            if (!resp.ok) throw new Error(`Server error ${resp.status}`);
-            const data = await resp.json();
-            const assistantMsg = data.response || "[no reply]";
-            this._appendMessage("assistant", assistantMsg);
-            this._conversation.push({ role: "assistant", content: assistantMsg });
-            // Emit custom event for external listeners (e.g., demo page)
-            this.dispatchEvent(new CustomEvent("lollms-response", { detail: data }));
+            const data = await res.json();
+            const reply = data.response || "Error: No response from server.";
+            this.addMessage('bot', reply);
+            this._conversation.push({role: 'assistant', content: reply});
         } catch (e) {
-            console.error(e);
-            this._appendMessage("assistant", `Error: ${e.message}`);
+            this.addMessage('bot', "Connection failed.");
         }
+    }
+
+    addMessage(role, text) {
+        const div = document.createElement('div');
+        div.className = `msg ${role}`;
+        div.innerHTML = role === 'bot' ? mdToHtml(text) : text;
+        const box = this.shadowRoot.getElementById('msgs');
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
     }
 }
 
-// Register the custom element (must contain a hyphen)
 customElements.define("lollms-chat", LollmsChat);
