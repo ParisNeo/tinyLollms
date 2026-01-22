@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>microLollMS Admin Panel</title>
+    <style>
+        body {font-family: 'Segoe UI', Tahoma, sans-serif; background:#f4f7f9; margin:0; padding:0;}
+        .container {max-width: 900px; margin: 40px auto; background:#fff; padding:30px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1);}
+        h1 {text-align:center; color:#333;}
+        .msg {color:#c00; margin-top:10px;}
+        .login-section, .dashboard-section {display:none;}
+        .app-table {width:100%; border-collapse:collapse; margin-top:20px;}
+        .app-table th, .app-table td {border:1px solid #ddd; padding:8px; text-align:left;}
+        .app-table th {background:#f0f0f0;}
+        button {padding:8px 12px; background:#0066cc; color:#fff; border:none; border-radius:4px; cursor:pointer;}
+        button:hover {background:#004999;}
+        .danger {background:#d9534f;}
+        .danger:hover {background:#c9302c;}
+        .form-section {margin-top:30px;}
+        .form-section input {padding:6px; width:calc(100% - 14px); margin-bottom:10px;}
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>microLollMS Admin Panel</h1>
+
+    <!-- Login Section -->
+    <div class="login-section" id="loginSection">
+        <label>Username:
+            <input type="text" id="username" placeholder="admin">
+        </label><br>
+        <label>Password:
+            <input type="password" id="password" placeholder="admin123">
+        </label><br>
+        <button id="loginBtn">Login</button>
+        <div class="msg" id="loginMsg"></div>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div class="dashboard-section" id="dashboardSection">
+        <button id="logoutBtn" class="danger">Logout</button>
+        <h2>Applications</h2>
+        <table class="app-table" id="appsTable">
+            <thead>
+                <tr><th>Key</th><th>Name</th><th>Allowed Models</th><th>Actions</th></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="form-section">
+            <h3>Add / Update Application</h3>
+            <form id="appForm">
+                <!-- Key input removed – server generates it automatically -->
+                <input type="text" name="name" placeholder="Name" required><br>
+                <input type="text" name="models" placeholder="Allowed models (comma separated)"><br>
+                <button type="submit" id="saveBtn">Save</button>
+            </form>
+            <pre id="result"></pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    const loginSection = document.getElementById('loginSection');
+    const dashboardSection = document.getElementById('dashboardSection');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const loginMsg = document.getElementById('loginMsg');
+    const result = document.getElementById('result');
+    const appsTableBody = document.querySelector('#appsTable tbody');
+    let token = null;
+    let editMode = false; // false = add, true = update
+    let editKey = null;   // holds key of app being edited
+
+    function showLogin() { loginSection.style.display='block'; dashboardSection.style.display='none'; }
+    function showDashboard() { loginSection.style.display='none'; dashboardSection.style.display='block'; loadApps(); }
+
+    // Initial view
+    showLogin();
+
+    loginBtn.addEventListener('click', async () => {
+        const payload = {
+            username: document.getElementById('username').value,
+            password: document.getElementById('password').value
+        };
+        try {
+            const resp = await fetch('/admin/login', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) throw new Error('Invalid credentials');
+            const data = await resp.json();
+            token = data.access_token;
+            loginMsg.textContent = '';
+            showDashboard();
+        } catch (e) {
+            loginMsg.textContent = e.message;
+        }
+    });
+
+    logoutBtn.addEventListener('click', () => {
+        token = null;
+        editMode = false;
+        editKey = null;
+        document.getElementById('appForm').reset();
+        showLogin();
+    });
+
+    async function loadApps() {
+        const resp = await fetch('/admin/apps', {
+            headers: {'Authorization': `Bearer ${token}`}
+        });
+        const apps = await resp.json();
+        appsTableBody.innerHTML = '';
+        apps.forEach(app => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${app.key}</td>
+                <td>${app.name}</td>
+                <td>${app.allowed_models.join(', ')}</td>
+                <td>
+                    <button class="editBtn">Edit</button>
+                    <button class="delBtn danger">Delete</button>
+                </td>
+            `;
+            // Edit handler
+            tr.querySelector('.editBtn').addEventListener('click', () => {
+                editMode = true;
+                editKey = app.key;
+                const form = document.getElementById('appForm');
+                form.name.value = app.name;
+                form.models.value = app.allowed_models.join(', ');
+                document.getElementById('saveBtn').textContent = 'Update';
+            });
+            // Delete handler
+            tr.querySelector('.delBtn').addEventListener('click', async () => {
+                if (!confirm(`Delete app ${app.key}?`)) return;
+                const delResp = await fetch(`/admin/apps/${app.key}`, {
+                    method: 'DELETE',
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                const delData = await delResp.json();
+                result.textContent = JSON.stringify(delData, null, 2);
+                loadApps();
+            });
+            appsTableBody.appendChild(tr);
+        });
+    }
+
+    // Add / Update form submit
+    document.getElementById('appForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        const form = e.target;
+        const payload = {
+            name: form.name.value,
+            models: form.models.value
+        };
+        const url = editMode ? `/admin/apps/${editKey}` : '/admin/add_app';
+        const method = editMode ? 'PUT' : 'POST';
+        try {
+            const resp = await fetch(url, {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            result.textContent = JSON.stringify(data, null, 2);
+            loadApps();
+            form.reset();
+            editMode = false;
+            editKey = null;
+            document.getElementById('saveBtn').textContent = 'Save';
+        } catch (err) {
+            result.textContent = 'Error: ' + err.message;
+        }
+    });
+</script>
+</body>
+</html>
